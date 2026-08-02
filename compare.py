@@ -83,12 +83,26 @@ class PlanComparison:
 			"rate": 0.244,         # $/kWh
 			"levy": 0.0019,        # $/kWh
 			"daily_charge": 2.801, # $/day
+			"free_periods": [],    # (hour_start, hour_end, day_type)
+		},
+		"standard_low_user": {
+			"rate": 0.288,       # $/kWh
+			"levy": 0.0019,      # $/kWh
+			"daily_charge": 1.8, # $/day
 			"free_periods": [],  # (hour_start, hour_end, day_type)
 		},
 		"good_weekends": {
 			"rate": 0.247,       # $/kWh
 			"levy": 0,           # $/kWh
 			"daily_charge": 3.1, # $/day
+			"free_periods": [    # 9am to 5pm on weekends
+				(9, 17, "weekend"),
+			],
+		},
+		"good_weekends_low_user": {
+			"rate": 0.316,       # $/kWh
+			"levy": 0,           # $/kWh
+			"daily_charge": 1.8, # $/day
 			"free_periods": [    # 9am to 5pm on weekends
 				(9, 17, "weekend"),
 			],
@@ -101,10 +115,27 @@ class PlanComparison:
 				(21, 24, "weekday"),
 			],
 		},
+		"good_nights_low_user": {
+			"rate": 0.359,       # $/kWh
+			"levy": 0,           # $/kWh
+			"daily_charge": 1.8, # $/day
+			"free_periods": [    # 9pm to midnight Monday to Friday
+				(21, 24, "weekday"),
+			],
+		},
 		"good_charge": {
 			"rate": 0.287,         # $/kWh
 			"levy": 0,             # $/kWh
 			"daily_charge": 3.101, # $/day
+			"free_periods": [],  # No free periods, but has half-price periods
+			"half_price_periods": [  # 9pm to 7am at half rate
+				(21, 7),  # starts at hour 21, ends at hour 7 (next day)
+			],
+		},
+		"good_charge_low_user": {
+			"rate": 0.346,       # $/kWh
+			"levy": 0,           # $/kWh
+			"daily_charge": 1.8, # $/day
 			"free_periods": [],  # No free periods, but has half-price periods
 			"half_price_periods": [  # 9pm to 7am at half rate
 				(21, 7),  # starts at hour 21, ends at hour 7 (next day)
