@@ -1,0 +1,3 @@
+aiohttp==3.13.4
+async-timeout==5.0.1
+contact-energy-nz==0.1.27241988865
