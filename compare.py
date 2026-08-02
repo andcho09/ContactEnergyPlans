@@ -3,6 +3,60 @@ import os
 from datetime import datetime, date
 from typing import Dict, List
 
+MONTH_NAME_TO_MONTH = {
+	"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
+	"Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
+}
+
+def load_powershop_prices(csv_path: str) -> Dict[str, Dict[str, float]]:
+	"""
+	Load Powershop monthly prices from CSV file.
+	Returns dictionary mapping month (e.g., "01" for January) to rates for each plan type.
+
+	Structure:
+	- standard_anytime: Flat rate (Anytime column)
+	- standard_peak: Peak rate
+	- standard_offpeak: Off-peak rate
+	"""
+	if not os.path.exists(csv_path):
+		return {
+			"standard_anytime": {},
+			"standard_peak": {},
+			"standard_offpeak": {},
+		}
+
+	prices = {
+		"standard_anytime": {},
+		"standard_peak": {},
+		"standard_offpeak": {},
+	}
+
+	with open(csv_path, 'r') as f:
+		reader = csv.DictReader(f)
+		for row in reader:
+			if row.get('Type') == 'Standard user, Standard Rates, Uncontrolled connections - Anytime':
+				plan_prices = prices["standard_anytime"]
+			elif row.get('Type') == 'Standard user, Standard Rates, Uncontrolled connections - Off Peak':
+				plan_prices = prices["standard_offpeak"]
+			elif row.get('Type') == 'Standard user, Standard Rates, Uncontrolled connections - Peak':
+				plan_prices = prices["standard_peak"]
+			else:
+				print(f"Skipping unknown Powershop monthly plan {row.get('Type')}")
+				continue
+
+			# Get month from column name and convert to YYYY-MM format
+			for month_col in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']:
+				if month_col in row and row[month_col]:
+					try:
+						price = float(row[month_col])
+						month_num = MONTH_NAME_TO_MONTH[month_col]
+						plan_prices[month_num] = price
+					except ValueError:
+						continue
+
+	return prices
+
+
 class PlanComparison:
 	"""
 	Class for comparing energy plan costs and analysing usage patterns.
@@ -19,10 +73,11 @@ class PlanComparison:
 		- good_weekends: Free 9am-5pm on weekends
 		- good_nights: Free 9pm-midnight on weekdays
 		- good_charge: Half-price 9pm-7am
+		- powershop_anytime: Powershop flat rate (no daily charge)
+		- powershop_shifty: Powershop peak/off-peak with shifty logic
 	"""
 
-	# Plan pricing configuration (ex GST)
-	# All rates are per kWh except daily_charge which is per day
+	# Standard plan pricing configuration (ex GST) - daily charges per day
 	PLANS = {
 		"standard": {
 			"rate": 0.244,         # $/kWh
@@ -55,23 +110,46 @@ class PlanComparison:
 				(21, 7),  # starts at hour 21, ends at hour 7 (next day)
 			],
 		},
+		# Powershop plans (additions to existing plans)
+		"powershop_anytime": {
+			"rate": 0.0,  # Will be loaded from CSV
+			"levy": 0.0,  # Will be loaded from CSV
+			"daily_charge": 3.1303,  # Powershop daily charge
+			"free_periods": [],
+			"source": "powershop_auckland_vector_prices.csv",
+		},
+		"powershop_shifty": {
+			"rate": 0.0,  # Will be loaded from CSV (peak rate)
+			"levy": 0.0,  # Will be loaded from CSV
+			"daily_charge": 3.1303,  # Powershop daily charge
+			"free_periods": [],
+			"source": "powershop_auckland_vector_prices.csv",
+		},
 	}
 
-	def __init__(self, data_dir: str):
-		"""Load .csv files from the data_dir which are named by date into a list of rows
-		containing date, hour, usage (in kwh)
+	# Shifty peak hours: weekdays 7-11am and 6-9pm
+	SHIFTY_PEAK_START = 7
+	SHIFTY_PEAK_END = 11
+	SHIFTY_EVENING_START = 18
+	SHIFTY_EVENING_END = 21
+
+	def __init__(self, data_dir: str, powershop_prices_path: str = "powershop_auckland_vector_prices.csv"):
+		"""
+		Load .csv files from the data_dir and Powershop prices.
 
 		Args:
 			data_dir: Directory containing CSV files with usage data. Files should be named
 				in YYYYMMDD format (e.g., "20250601.csv").
-
-		Note:
-			The data is stored in self.data as a dictionary mapping dates to lists of row dictionaries.
-			Each row contains: hour, kwh, price, uncharged_kwh, offpeak_kwh, offpeak_price, date
+			powershop_prices_path: Path to CSV file with Powershop monthly prices.
 		"""
 
 		self.data_dir = data_dir
+		self.powershop_prices_path = powershop_prices_path
 		self.data: Dict[date, List[Dict]] = {}
+		self.powershop_monthly_prices: Dict[str, Dict[str, float]] = {}
+
+		# Load Powershop prices (once)
+		self.powershop_monthly_prices = load_powershop_prices(powershop_prices_path)
 
 		# Load all CSV files from the directory
 		if os.path.exists(self.data_dir):
@@ -118,6 +196,14 @@ class PlanComparison:
 		"""Check if a date is a weekday"""
 		return d.weekday() < 5
 
+	def _is_in_hour_range(self, hour: int, start: int, end: int) -> bool:
+		"""Check if hour is in range [start, end). Note: hour 0-24"""
+		if start < end:
+			return start <= hour < end
+		else:
+			# Handles overnight ranges like 21 to 7
+			return hour >= start or hour < end
+
 	def is_free_period(self, hour: int, d: date, plan: str) -> bool:
 		"""Check if the given hour falls within a free period for this plan"""
 		if plan not in self.PLANS:
@@ -133,13 +219,34 @@ class PlanComparison:
 					return True
 		return False
 
-	def _is_in_hour_range(self, hour: int, start: int, end: int) -> bool:
-		"""Check if hour is in range [start, end). Note: hour 0-24"""
-		if start < end:
-			return start <= hour < end
-		else:
-			# Handles overnight ranges like 21 to 7
-			return hour >= start or hour < end
+	def is_shifted_hour(self, hour: int, d: date, plan: str) -> bool:
+		"""
+		Check if the given hour falls within a shifty period (off-peak pricing during peak hours).
+		For powershop_shifty: weekdays 7-11am and 6-9pm use off-peak rate.
+		"""
+		if plan != "powershop_shifty":
+			return False
+
+		# Only on weekdays for shifty
+		if not self.is_weekday(d):
+			return False
+
+		# Check if hour is in peak range: 7-11am or 6-9pm
+		if self._is_in_hour_range(hour, self.SHIFTY_PEAK_START, self.SHIFTY_PEAK_END):
+			return True
+		if self._is_in_hour_range(hour, self.SHIFTY_EVENING_START, self.SHIFTY_EVENING_END):
+			return True
+
+		return False
+
+	def _get_powershop_month_key(self, d: date, plan: str) -> str:
+		"""
+		Get the monthly price key for a Powershop plan based on the date.
+		Uses the month from the date (e.g., "2026-07" for July 2026).
+		"""
+		if plan in ["powershop_anytime", "powershop_shifty"]:
+			return d.strftime("%m")
+		return ""
 
 	def is_half_price_period(self, hour: int, d: date, plan: str) -> bool:
 		"""Check if the given hour falls within a half-price period for this plan"""
@@ -152,26 +259,65 @@ class PlanComparison:
 				return True
 		return False
 
+	def _get_rate(self, row: Dict, plan: str) -> float:
+		"""
+		Get the appropriate rate for a given plan, accounting for:
+		- Powershop monthly prices from CSV
+		- Standard plan rates
+		- Shifty peak/off-peak logic
+		- Half price periods (good_charge)
+		"""
+		_plan = self.PLANS[plan]
+
+		# Standard plans use fixed rates
+		if plan in ["standard", "good_weekends", "good_nights"]:
+			return _plan["rate"]
+
+		# good_charge has half-price periods (9pm to 7am at half rate)
+		if plan == "good_charge":
+			hour = row['hour']
+			if self.is_half_price_period(hour, row['date'], plan):
+				return _plan["rate"] / 2
+			return _plan["rate"]
+
+		# Powershop plans
+		if plan == "powershop_anytime":
+			# Use anytime rate from CSV
+			month_key = self._get_powershop_month_key(row['date'], plan)
+			if month_key in self.powershop_monthly_prices["standard_anytime"]:
+				return self.powershop_monthly_prices["standard_anytime"][month_key]
+			raise RuntimeError(f"Couldn't find Powershop anytime rate for month key {month_key}")
+
+		elif plan == "powershop_shifty":
+			# Use peak rate from CSV, but off-peak rate during shifted hours
+			hour = row['hour']
+			month_key = self._get_powershop_month_key(row['date'], plan)
+
+			if month_key in self.powershop_monthly_prices["standard_offpeak"]:
+				if self.is_shifted_hour(hour, row['date'], plan):
+					# Use off-peak rate during shifted hours
+					return self.powershop_monthly_prices["standard_offpeak"][month_key]
+				if month_key in self.powershop_monthly_prices["standard_peak"]:
+					# Use peak rate during normal hours
+					return self.powershop_monthly_prices["standard_peak"][month_key]
+			raise RuntimeError(f"Couldn't find Powershop shifty rates for month key '{month_key}'")
+
+		return _plan["rate"]
+
 	def calculate_hourly_cost(self, row: Dict, plan: str) -> float:
 		"""Calculate cost for a single hour of usage under a given plan"""
 		kwh = row['kwh']
 		hour = row['hour']
 
-		base_rate = self.PLANS[plan]["rate"]
+		base_rate = self._get_rate(row, plan)
 		levy = self.PLANS[plan]["levy"]
 
 		# Check if free period (completely free power)
 		if self.is_free_period(hour, row['date'], plan):
 			return 0.0
 
-		# Check if half-price period
-		if self.is_half_price_period(hour, row['date'], plan):
-			rate = base_rate / 2
-		else:
-			rate = base_rate
-
-		# Cost for this hour: kwh divided by 24 hours to get hourly usage, times rate
-		hourly_cost = kwh * (rate + levy)
+		# Cost for this hour: kwh times rate + levy
+		hourly_cost = kwh * (base_rate + levy)
 		return hourly_cost
 
 	def calculate_daily_cost(self, rows: List[Dict], plan: str) -> float:
@@ -183,27 +329,30 @@ class PlanComparison:
 			total_cost += hourly_cost
 
 		# Add daily charge for this day (only once per day)
-		total_cost += self.PLANS[plan]["daily_charge"]
+		if plan in ["powershop_anytime", "powershop_shifty"]:
+			# Powershop has daily charge from config
+			total_cost += self.PLANS[plan]["daily_charge"]
+		else:
+			total_cost += self.PLANS[plan]["daily_charge"]
 
 		return total_cost
 
 	def compare(self):
 		"""Compare plans breaking down price per month and total usage
 		Returns a list of dicts for CSV output with plans as columns
+
+		Plans included:
+		- standard, good_weekends, good_nights, good_charge (original plans)
+		- powershop_anytime, powershop_shifty (new additions)
 		"""
 		if not self.data:
 			return []
-
-		# Get date range
-		sorted_dates = sorted(self.data.keys())
-		first_date = sorted_dates[0]
-		last_date = sorted_dates[-1]
 
 		# Group by month: structure is {month_name: {plan_name: cost}}
 		monthly_costs: Dict[str, Dict[str, float]] = {}
 
 		# Process each date
-		for d in sorted_dates:
+		for d in sorted(self.data.keys()):
 			rows = self.data[d]
 
 			# Calculate daily cost for each plan
@@ -250,10 +399,12 @@ class PlanComparison:
 
 
 if __name__ == "__main__":
-	# Test with data directory
+	# Test with data directory and Powershop prices
 	data_dir = "data"
+	powershop_prices_path = "powershop_auckland_vector_prices.csv"
+
 	if os.path.exists(data_dir) and os.listdir(data_dir):
-		comparator = PlanComparison(data_dir)
+		comparator = PlanComparison(data_dir, powershop_prices_path)
 		results = comparator.compare()
 
 		# Print results
@@ -271,7 +422,8 @@ if __name__ == "__main__":
 		# Also output to CSV
 		output_csv = "comparison_results.csv"
 		with open(output_csv, 'w', newline='') as f:
-			writer = csv.DictWriter(f, fieldnames=['Month'] + list(PlanComparison.PLANS.keys()))
+			fieldnames = ['Month'] + [p for p in comparator.PLANS.keys()]
+			writer = csv.DictWriter(f, fieldnames=fieldnames)
 			writer.writeheader()
 			writer.writerows(results)
 		print(f"\nResults written to {output_csv}")

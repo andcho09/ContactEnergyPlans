@@ -1,0 +1,4 @@
+Type,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec
+"Standard user, Standard Rates, Uncontrolled connections - Peak",0.2325,0.2379,0.2546,0.4118,0.4118,0.4118,0.4118,0.4066,0.3934,0.2413,0.2358,0.2325
+"Standard user, Standard Rates, Uncontrolled connections - Off Peak",0.2325,0.2379,0.2546,0.2684,0.2684,0.2684,0.2684,0.2632,0.2500,0.2413,0.2358,0.2325
+"Standard user, Standard Rates, Uncontrolled connections - Anytime",0.2588,0.2642,0.2808,0.2946,0.2946,0.2946,0.2946,0.2895,0.2762,0.2675,0.2620,0.2588
