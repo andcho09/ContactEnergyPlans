@@ -22,4 +22,17 @@ Downloads Contact Energy electricity usage using [contact-energy-nz](https://git
 	* `CONTRACT_ID`
 	* `TOKEN`
 
+**Downloading usage data**
+
+1. Tweak the start and end dates in [main.py](main.py)
+1. Run the downloader
+
+	```bash
+	python3 main.py
+	```
+
+	Files are saved as .csv to the `data` folder by date.
+
 ## References
+
+* [contact-energy-nz](https://github.com/tkhadimullin/contact-energy-nz)

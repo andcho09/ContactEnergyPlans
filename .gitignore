@@ -1,3 +1,4 @@
 .env
 .venv
+comparison_results.csv
 data

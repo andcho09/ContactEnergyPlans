@@ -1,15 +1,24 @@
-import asyncio # TODO not used
+import asyncio
 import async_timeout
 import csv
 import datetime
 import os
 from pathlib import Path
-from contact_energy_nz import AuthException, ContactEnergyApi, UsageDatum
+from contact_energy_nz import ContactEnergyApi, UsageDatum
 
 OUTPUT_HEADERS = ['hour', 'kwh', 'price', 'uncharged_kwh', 'offpeak_kwh', 'offpeak_price']
 TIMEOUT: float = 15 # seconds
 
 class ContactEnergyUsageDownloader:
+	"""
+	Downloads hourly energy usage data from the Contact Energy API and saves it to CSV files.
+
+	Responsibilities:
+		- Authenticates with Contact Energy API using either token or username/password
+		- Downloads hourly usage data for a date range
+		- Writes data to CSV files in the specified output directory
+		- Prevents duplicate downloads unless overwrite=True
+	"""
 
 	def __init__(self, output_dir: str, account_id: str, contract_id: str, token: str, username: str, password: str):
 		# Authenticate
@@ -36,10 +45,7 @@ class ContactEnergyUsageDownloader:
 		while date >= date_start:
 			print(f"Downloading data for {str(date)}...")
 			data = await self.download_async(date)
-			if self.write(date, data, overwrite):
-				print(f"Successfully wrote data for {str(date)}")
-			else:
-				print(f"Failed to write data for {str(date)}")
+			self.write(date, data, overwrite)
 			date = date - datetime.timedelta(days=1)
 
 	async def download_async(self, date: datetime.date) -> list[UsageDatum]:
@@ -58,6 +64,7 @@ class ContactEnergyUsageDownloader:
 			csv_writer.writerow(OUTPUT_HEADERS)
 			for d in data:
 				csv_writer.writerow([d.date.hour, d.value, d.dollar_value, d.uncharged_value, d.offpeak_value, d.offpeak_dollar_value])
+		print(f"Wrote date to: {str(path)}")
 		return True
 
 # Load .env file
@@ -71,6 +78,6 @@ with open(".env") as f:
 downloader: ContactEnergyUsageDownloader = ContactEnergyUsageDownloader("data", os.getenv("ACCOUNT_ID", ""), os.getenv("CONTRACT_ID", ""), os.getenv("TOKEN", ""), os.getenv("USERNAME", ""), os.getenv("PASSWORD", ""))
 
 if __name__ == "__main__":
-	start = datetime.date(2026, 7, 31)
-	end =   datetime.date(2026, 7, 31)
+	start = datetime.date(2025, 6, 1)
+	end =   datetime.date(2026, 6, 30)
 	asyncio.run(downloader.download(start, end, False))
