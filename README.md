@@ -33,6 +33,17 @@ Downloads Contact Energy electricity usage using [contact-energy-nz](https://git
 
 	Files are saved as .csv to the `data` folder by date.
 
+**Comparing electricity plans**
+
+Once data has been downloaded compare different Contact energy plans:
+
+1. Tweak the plan rates and free or half-price periods in [compare.py](compare.py)
+1. Run the comparison
+
+	```bash
+	python3 compare.py
+	```
+
 ## References
 
 * [contact-energy-nz](https://github.com/tkhadimullin/contact-energy-nz)
