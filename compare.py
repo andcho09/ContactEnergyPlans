@@ -428,6 +428,26 @@ class PlanComparison:
 
 		return output_rows
 
+def format_plan_name(name: str, max_length: int) -> list[str]:
+	"""
+	Formats plan name for terminal table output.
+	- splits a string into two of equal length.
+	- replaces "_" with " " characters
+	- upper cases the first character
+
+	Args:
+		name (str): The plan to format
+		max_length (int): Max length the formatted name should be
+
+	Returns:
+		list[str]: a list of length two. Strings are padded to be equal length
+	"""
+	_name = name.replace('_', ' ')
+	_name = _name[:1].upper() + _name[1:]
+	if len(_name) <= max_length:
+		return [_name, ''.ljust(len(_name))]
+	_index_split = _name[0 : max_length].rfind(' ')
+	return [ _name[:_index_split], _name[_index_split + 1:].ljust(_index_split) ]
 
 if __name__ == "__main__":
 	# Test with data directory and Powershop prices
@@ -438,17 +458,36 @@ if __name__ == "__main__":
 		comparator = PlanComparison(data_dir, powershop_prices_path)
 		results = comparator.compare()
 
-		# Print results
-		print("Plan Comparison Results:")
+		# Print results in ASCII table format with wrapped plan names
+		print("\nPlan Comparison Results:")
 		print("-" * 100)
+		# Header with plan names wrapping at 14 characters per column
+		plans = list(comparator.PLANS.keys())
+		MONTH_WIDTH = 7
+		PLAN_MAX_WIDTH = 14
+
+		# Print header
+		plan_formatted_names = [format_plan_name(p, PLAN_MAX_WIDTH) for p in plans]
+		# First line: Month + first PLAN_MAX_WIDTH chars of each plan name
+		line = 'Month  '
+		for plan_formatted_name in plan_formatted_names:
+			line += '|' + plan_formatted_name[0]
+		print(line)
+
+		# Second line: remaining chars of plan names
+		line = '       '
+		for plan_formatted_name in plan_formatted_names:
+			line += '|' + plan_formatted_name[1]
+		print(line)
+		print("-" * 100)
+		# Print each row (data columns use same width as header)
 		for row in results:
 			month = row['Month']
-			parts = []
-			for plan_name, value in row.items():
-				if plan_name != 'Month':
-					parts.append(f"{plan_name}: ${value:.2f}")
-			print(f"{month}: " + ", ".join(parts))
-		print("-" * 100)
+			month_line = month.ljust(MONTH_WIDTH)
+			line = month_line
+			for i, plan in enumerate(plans):
+				line += '|' + f"${row[plan]:.2f}".rjust(len(plan_formatted_names[i][0]))
+			print(line)
 
 		# Also output to CSV
 		output_csv = "comparison_results.csv"
