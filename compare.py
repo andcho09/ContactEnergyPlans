@@ -141,6 +141,30 @@ class PlanComparison:
 				(21, 7),  # starts at hour 21, ends at hour 7 (next day)
 			],
 		},
+		"genesis_standard": {
+			"rate": 0.2481,         # $/kWh
+			"levy": 0,              # $/kWh
+			"daily_charge": 2.2848, # $/day
+			"free_periods": []  # No free periods, but has half-price periods
+		},
+		"genesis_standard_low_user": {
+			"rate": 0.2858,         # $/kWh
+			"levy": 0,              # $/kWh
+			"daily_charge": 1.4550, # $/day
+			"free_periods": []  # No free periods, but has half-price periods
+		},
+		# "genesis_time_varied": {
+		# 	"rate": 0.2481,         # $/kWh
+		# 	"levy": 0,              # $/kWh
+		# 	"daily_charge": 2.2848, # $/day
+		# 	"free_periods": []  # No free periods, but has half-price periods
+		# },
+		# "genesis_time_varied_low_user": {
+		# 	"rate": 0.2858,         # $/kWh
+		# 	"levy": 0,              # $/kWh
+		# 	"daily_charge": 1.4550, # $/day
+		# 	"free_periods": []  # No free periods, but has half-price periods
+		# },
 		# Powershop plans (additions to existing plans)
 		"powershop_anytime": {
 			"rate": 0.0,  # Will be loaded from CSV
@@ -447,7 +471,10 @@ def format_plan_name(name: str, max_length: int) -> list[str]:
 	if len(_name) <= max_length:
 		return [_name, ''.ljust(len(_name))]
 	_index_split = _name[0 : max_length].rfind(' ')
-	return [ _name[:_index_split], _name[_index_split + 1:].ljust(_index_split) ]
+	_name1 = _name[:_index_split]
+	_name2 = _name[_index_split + 1:].ljust(_index_split)
+	_name_length = max(len(_name1), len(_name2))
+	return [ _name1.ljust(_name_length), _name2.ljust(_name_length) ]
 
 if __name__ == "__main__":
 	# Test with data directory and Powershop prices
