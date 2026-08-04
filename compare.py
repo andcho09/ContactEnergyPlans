@@ -153,19 +153,20 @@ class PlanComparison:
 			"daily_charge": 1.4550, # $/day
 			"free_periods": []  # No free periods, but has half-price periods
 		},
-		# "genesis_time_varied": {
-		# 	"rate": 0.2481,         # $/kWh
-		# 	"levy": 0,              # $/kWh
-		# 	"daily_charge": 2.2848, # $/day
-		# 	"free_periods": []  # No free periods, but has half-price periods
-		# },
-		# "genesis_time_varied_low_user": {
-		# 	"rate": 0.2858,         # $/kWh
-		# 	"levy": 0,              # $/kWh
-		# 	"daily_charge": 1.4550, # $/day
-		# 	"free_periods": []  # No free periods, but has half-price periods
-		# },
-		# Powershop plans (additions to existing plans)
+		"genesis_time_varied": {
+			"rate": 0,              # Will be loaded from CSV
+			"levy": 0,              # $/kWh
+			"daily_charge": 2.6275, # $/day
+			"free_periods": [],     # No free periods, uses peak and off peak pricing
+			"source": "genesis_auckland_prices.csv"
+		},
+		"genesis_time_varied_low_user": {
+			"rate": 0.2858,         # Will be loaded from CSV
+			"levy": 0,              # $/kWh
+			"daily_charge": 1.6733, # $/day
+			"free_periods": [],     # No free periods, uses peak and off peak pricing
+			"source": "genesis_low_user_auckland_prices.csv"
+		},
 		"powershop_anytime": {
 			"rate": 0.0,  # Will be loaded from CSV
 			"levy": 0.0,  # Will be loaded from CSV
@@ -179,7 +180,7 @@ class PlanComparison:
 			"daily_charge": 3.1303,  # Powershop daily charge
 			"free_periods": [],
 			"source": "powershop_auckland_vector_prices.csv",
-		},
+		}
 	}
 
 	# Shifty peak hours: weekdays 7-11am and 6-9pm
@@ -187,6 +188,10 @@ class PlanComparison:
 	SHIFTY_PEAK_END = 11
 	SHIFTY_EVENING_START = 18
 	SHIFTY_EVENING_END = 21
+
+	# Genesis time-varied peak hours: 7am to 9pm
+	GENESIS_PEAK_START = 7
+	GENESIS_PEAK_END = 21
 
 	def __init__(self, data_dir: str, powershop_prices_path: str = "powershop_auckland_vector_prices.csv"):
 		"""
@@ -202,9 +207,14 @@ class PlanComparison:
 		self.powershop_prices_path = powershop_prices_path
 		self.data: Dict[date, List[Dict]] = {}
 		self.powershop_monthly_prices: Dict[str, Dict[str, float]] = {}
+		self.genesis_time_varied_prices: Dict[str, Dict[str, Dict[str, float]]] = {}
 
 		# Load Powershop prices (once)
 		self.powershop_monthly_prices = load_powershop_prices(powershop_prices_path)
+
+		# Load Genesis time-varied prices for Auckland
+		self.genesis_time_varied_prices["genesis_time_varied"] = load_genesis_time_varied_prices("genesis_auckland_prices.csv")
+		self.genesis_time_varied_prices["genesis_time_varied_low_user"] = load_genesis_time_varied_prices("genesis_low_user_auckland_prices.csv")
 
 		# Load all CSV files from the directory
 		if os.path.exists(self.data_dir):
@@ -321,8 +331,11 @@ class PlanComparison:
 		- Standard plan rates
 		- Shifty peak/off-peak logic
 		- Half price periods (good_charge)
+		- Genesis time-varied peak/off-peak pricing
 		"""
 		_plan = self.PLANS[plan]
+		hour = row['hour']
+		month_key = row['date'].strftime("%m")
 
 		# Standard plans use fixed rates
 		if plan in ["standard", "good_weekends", "good_nights"]:
@@ -330,24 +343,37 @@ class PlanComparison:
 
 		# good_charge has half-price periods (9pm to 7am at half rate)
 		if plan == "good_charge":
-			hour = row['hour']
 			if self.is_half_price_period(hour, row['date'], plan):
 				return _plan["rate"] / 2
 			return _plan["rate"]
 
+		# Genesis time-varied plans (peak GENESIS_PEAK_START to GENESIS_PEAK_END, off-peak remainder)
+		if plan in ["genesis_time_varied", "genesis_time_varied_low_user"]:
+			genesis_prices = self.genesis_time_varied_prices[plan]
+			peak_price_key = genesis_prices["peak"]
+			off_peak_price_key = genesis_prices["off_peak"]
+
+			# Use GENESIS_PEAK_START and GENESIS_PEAK_END constants
+			if self.GENESIS_PEAK_START <= hour < self.GENESIS_PEAK_END: # Peak hours
+				if month_key in peak_price_key:
+					return peak_price_key[month_key]
+				else:
+					return _plan["rate"]
+			else:  # Off-peak hours
+				if month_key in off_peak_price_key:
+					return off_peak_price_key[month_key]
+				else:
+					return _plan["rate"]
+
 		# Powershop plans
 		if plan == "powershop_anytime":
 			# Use anytime rate from CSV
-			month_key = self._get_powershop_month_key(row['date'], plan)
 			if month_key in self.powershop_monthly_prices["standard_anytime"]:
 				return self.powershop_monthly_prices["standard_anytime"][month_key]
 			raise RuntimeError(f"Couldn't find Powershop anytime rate for month key {month_key}")
 
 		elif plan == "powershop_shifty":
 			# Use peak rate from CSV, but off-peak rate during shifted hours
-			hour = row['hour']
-			month_key = self._get_powershop_month_key(row['date'], plan)
-
 			if month_key in self.powershop_monthly_prices["standard_offpeak"]:
 				if self.is_shifted_hour(hour, row['date'], plan):
 					# Use off-peak rate during shifted hours
@@ -436,7 +462,7 @@ class PlanComparison:
 		sorted_months = sorted(monthly_costs.keys())
 
 		for m in sorted_months:
-			row = {'Month': m}
+			row: dict[str, str|float] = {'Month': m}
 			for plan_name in self.PLANS.keys():
 				# Show actual cost for each plan
 				row[plan_name] = round(monthly_costs[m][plan_name], 2)
@@ -444,13 +470,67 @@ class PlanComparison:
 			output_rows.append(row)
 
 		# Add total row
-		total_row = {'Month': 'total'}
+		total_row: dict[str, str|float] = {'Month': 'Total'}
 		for plan_name in self.PLANS.keys():
 			total_row[plan_name] = round(sum(monthly_costs[m][plan_name] for m in monthly_costs.keys()), 2)
 
 		output_rows.append(total_row)
 
 		return output_rows
+
+def load_genesis_time_varied_prices(csv_path: str) -> Dict[str, Dict[str, float]]:
+    """
+    Load Genesis time-varied prices from CSV file.
+    Returns dictionary mapping month (e.g., "01" for January) to peak and off-peak rates.
+
+    CSV format:
+        Type,Jan,Feb,Mar,...
+        "Genesis time-varied - Peak",30.48,...
+        "Genesis time-varied - Off Peak",20.64,...
+
+    Returns structure:
+        {
+            "peak": {"01": 30.48, ...},
+            "off_peak": {"01": 20.64, ...}
+        }
+    """
+    if not os.path.exists(csv_path):
+        return {
+            "peak": {},
+            "off_peak": {},
+        }
+
+    prices = {
+        "peak": {},
+        "off_peak": {},
+    }
+
+    with open(csv_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            # Peak pricing
+            if row.get('Type') == 'Genesis time-varied - Peak':
+                for month_col in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']:
+                    if month_col in row and row[month_col]:
+                        try:
+                            price = float(row[month_col])
+                            month_num = MONTH_NAME_TO_MONTH[month_col]
+                            prices["peak"][month_num] = price
+                        except ValueError:
+                            continue
+            # Off-peak pricing
+            elif row.get('Type') == 'Genesis time-varied - Off Peak':
+                for month_col in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']:
+                    if month_col in row and row[month_col]:
+                        try:
+                            price = float(row[month_col])
+                            month_num = MONTH_NAME_TO_MONTH[month_col]
+                            prices["off_peak"][month_num] = price
+                        except ValueError:
+                            continue
+
+    return prices
+
 
 def format_plan_name(name: str, max_length: int) -> list[str]:
 	"""
