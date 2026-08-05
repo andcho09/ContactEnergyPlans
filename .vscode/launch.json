@@ -18,6 +18,13 @@
 			"request": "launch",
 			"program": "compare.py",
 			"console": "integratedTerminal"
+		},
+		{
+			"name": "Usage Stats",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "usage_stats.py",
+			"console": "integratedTerminal"
 		}
 	]
 }

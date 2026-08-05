@@ -165,26 +165,26 @@ class PlanComparison:
 		"genesis_time_varied": {
 			"rate": 0,              # Will be loaded from CSV
 			"levy": 0,              # $/kWh
-			"daily_charge": 2.6275, # $/day
+			"daily_charge": 2.2848, # $/day
 			"free_periods": [],     # No free periods, uses peak and off peak pricing
 			"source": "genesis_auckland_prices.csv"
 		},
 		"genesis_time_varied_low_user": {
 			"rate": 0.2858,         # Will be loaded from CSV
 			"levy": 0,              # $/kWh
-			"daily_charge": 1.6733, # $/day
+			"daily_charge": 1.4550, # $/day
 			"free_periods": [],     # No free periods, uses peak and off peak pricing
 			"source": "genesis_low_user_auckland_prices.csv"
 		},
 		"powershop_anytime": {
-			"rate": 0.0,  # Will be loaded from CSV
+			"rate": 0.0,  # Will be loaded from CSV. Does this include GST???
 			"levy": 0.0,  # Will be loaded from CSV
 			"daily_charge": 3.1303,  # Powershop daily charge
 			"free_periods": [],
 			"source": "powershop_auckland_vector_prices.csv",
 		},
 		"powershop_shifty": {
-			"rate": 0.0,  # Will be loaded from CSV (peak rate)
+			"rate": 0.0,  # Will be loaded from CSV (peak rate). Does this include GST???
 			"levy": 0.0,  # Will be loaded from CSV
 			"daily_charge": 3.1303,  # Powershop daily charge
 			"free_periods": [],
