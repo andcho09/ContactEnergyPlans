@@ -352,12 +352,12 @@ class PlanComparison:
 				if month_key in peak_price_key:
 					return peak_price_key[month_key]
 				else:
-					return _plan["rate"]
+					raise RuntimeError(f"Couldn't find Genesis peak rate for month key {month_key}")
 			else:  # Off-peak hours
 				if month_key in off_peak_price_key:
 					return off_peak_price_key[month_key]
 				else:
-					return _plan["rate"]
+					raise RuntimeError(f"Couldn't find Genesis off-peak rate for month key {month_key}")
 
 		# Powershop plans
 		if plan == "powershop_anytime":
