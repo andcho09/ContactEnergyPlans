@@ -64,7 +64,7 @@ class ContactEnergyUsageDownloader:
 			csv_writer.writerow(OUTPUT_HEADERS)
 			for d in data:
 				csv_writer.writerow([d.date.hour, d.value, d.dollar_value, d.uncharged_value, d.offpeak_value, d.offpeak_dollar_value])
-		print(f"Wrote date to: {str(path)}")
+		print(f"Wrote data to: {str(path)}")
 		return True
 
 # Load .env file

@@ -3,6 +3,15 @@ import os
 from datetime import datetime, date
 from typing import Dict, List
 
+def _safe_float(row: dict, key: str, default: float = 0.0) -> float:
+	"""Return row[key] as a float, or default if missing/empty."""
+	val = row.get(key, default)
+	if isinstance(val, str):
+		val = val.strip()
+		return float(val) if val else default
+	return float(val) if val else default
+
+
 MONTH_NAME_TO_MONTH = {
 	"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
 	"Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
@@ -236,15 +245,9 @@ class PlanComparison:
 							price_str = row['price'].strip()
 							row['price'] = float(price_str) if price_str else 0.0
 							# Handle optional fields that may be missing from CSV
-							def safe_float(key, default=0.0):
-								val = row.get(key, default)
-								if isinstance(val, str):
-									val = val.strip()
-									return float(val) if val else default
-								return float(val) if val else default
-							row['uncharged_kwh'] = safe_float('uncharged_kwh')
-							row['offpeak_kwh'] = safe_float('offpeak_kwh')
-							row['offpeak_price'] = safe_float('offpeak_price')
+							row['uncharged_kwh'] = _safe_float(row, 'uncharged_kwh')
+							row['offpeak_kwh'] = _safe_float(row, 'offpeak_kwh')
+							row['offpeak_price'] = _safe_float(row, 'offpeak_price')
 							# Store the date in each row for later use
 							row['date'] = parsed_date
 							rows.append(row)
@@ -304,15 +307,6 @@ class PlanComparison:
 
 		return False
 
-	def _get_powershop_month_key(self, d: date, plan: str) -> str:
-		"""
-		Get the monthly price key for a Powershop plan based on the date.
-		Uses the month from the date (e.g., "2026-07" for July 2026).
-		"""
-		if plan in ["powershop_anytime", "powershop_shifty"]:
-			return d.strftime("%m")
-		return ""
-
 	def is_half_price_period(self, hour: int, d: date, plan: str) -> bool:
 		"""Check if the given hour falls within a half-price period for this plan"""
 		if plan not in self.PLANS:
@@ -341,8 +335,8 @@ class PlanComparison:
 		if plan in ["standard", "good_weekends", "good_nights"]:
 			return _plan["rate"]
 
-		# good_charge has half-price periods (9pm to 7am at half rate)
-		if plan == "good_charge":
+		# good_charge / good_charge_low_user have half-price periods (9pm to 7am at half rate)
+		if plan in ["good_charge", "good_charge_low_user"]:
 			if self.is_half_price_period(hour, row['date'], plan):
 				return _plan["rate"] / 2
 			return _plan["rate"]
@@ -410,11 +404,7 @@ class PlanComparison:
 			total_cost += hourly_cost
 
 		# Add daily charge for this day (only once per day)
-		if plan in ["powershop_anytime", "powershop_shifty"]:
-			# Powershop has daily charge from config
-			total_cost += self.PLANS[plan]["daily_charge"]
-		else:
-			total_cost += self.PLANS[plan]["daily_charge"]
+		total_cost += self.PLANS[plan]["daily_charge"]
 
 		return total_cost
 
