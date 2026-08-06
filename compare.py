@@ -170,7 +170,7 @@ class PlanComparison:
 			"source": "genesis_auckland_prices.csv"
 		},
 		"genesis_time_varied_low_user": {
-			"rate": 0.2858,         # Will be loaded from CSV
+			"rate": 0.0,            # Will be loaded from CSV
 			"levy": 0,              # $/kWh
 			"daily_charge": 1.4550, # $/day
 			"free_periods": [],     # No free periods, uses peak and off peak pricing

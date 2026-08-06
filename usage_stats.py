@@ -31,30 +31,30 @@ def _is_in_hour_range(hour: int, start: int, end: int) -> bool:
 def load_usage_data(data_dir: str) -> Dict[date, List[Dict]]:
     """
     Load all CSV files from the data directory.
-    
+
     Args:
         data_dir: Directory containing CSV files with usage data. Files should be named
             in YYYYMMDD format (e.g., "20250601.csv").
-    
+
     Returns:
         Dictionary mapping date objects to lists of hourly usage dictionaries.
     """
     data: Dict[date, List[Dict]] = {}
-    
+
     if not os.path.exists(data_dir):
         print(f"Data directory '{data_dir}' does not exist.")
         return data
-    
+
     for filename in sorted(os.listdir(data_dir)):
         if filename.endswith('.csv'):
             filepath = os.path.join(data_dir, filename)
             date_from_filename = filename[:-4]  # Remove .csv extension
-            
+
             with open(filepath, 'r') as f:
                 reader = csv.DictReader(f)
                 rows = []
                 parsed_date = datetime.strptime(date_from_filename, "%Y%m%d").date()
-                
+
                 for row in reader:
                     # Convert hour to integer for comparison
                     row['hour'] = int(row['hour'])
@@ -75,39 +75,40 @@ def load_usage_data(data_dir: str) -> Dict[date, List[Dict]]:
                     # Store the date in each row for later use
                     row['date'] = parsed_date
                     rows.append(row)
-                
+
                 if parsed_date not in data:
                     data[parsed_date] = []
                 data[parsed_date].extend(rows)
-    
+
     return data
 
 
 def calculate_monthly_stats(data: Dict[date, List[Dict]]) -> List[Dict]:
     """
     Calculate monthly usage statistics.
-    
+
     For each month, calculates:
     - Total kWh usage
     - Percentage of usage spent on weekends
     - Percentage of usage spent on weekends between 9am and 5pm
-    
+    - Percentage of usage consumed between 7am and 9pm
+
     Args:
         data: Dictionary mapping date objects to lists of hourly usage dictionaries.
-    
+
     Returns:
         List of dictionaries containing monthly statistics.
     """
-    # Structure: {month: {total_kwh: float, total_cost: float, weekend_kwh: float, weekend_9am_5pm_kwh: float}}
+    # Structure: {month: {total_kwh: float, total_cost: float, weekend_kwh: float, weekend_9am_5pm_kwh: float, peak_kwh: float}}
     monthly_stats: Dict[str, Dict] = {}
-    
+
     # Process each date
     for d in sorted(data.keys()):
         rows = data[d]
-        
+
         # Determine month (using date from data)
         month = d.strftime("%Y-%m")
-        
+
         # Initialize month if not exists
         if month not in monthly_stats:
             monthly_stats[month] = {
@@ -118,47 +119,60 @@ def calculate_monthly_stats(data: Dict[date, List[Dict]]) -> List[Dict]:
                 "weekend_cost": 0.0,
                 "weekend_9am_5pm_kwh": 0.0,
                 "weekend_9am_5pm_cost": 0.0,
+                "peak_kwh": 0.0,
+                "peak_cost": 0.0,
             }
-        
+
         # Accumulate stats for each row
         for row in rows:
             kwh = row['kwh']
             hour = row['hour']
             date_key = row['date']
-            
+
             # Add to total
             monthly_stats[month]["total_kwh"] += kwh
             monthly_stats[month]["total_cost"] += kwh * row['price']
-            
+
             # Check if weekend
             if is_weekend(date_key):
                 monthly_stats[month]["weekend_kwh"] += kwh
                 monthly_stats[month]["weekend_cost"] += kwh * row['price']
-                
+
                 # Check if in 9am-5pm range (9 to 17, i.e., hours 9, 10, ..., 16)
                 if _is_in_hour_range(hour, 9, 17):
                     monthly_stats[month]["weekend_9am_5pm_kwh"] += kwh
                     monthly_stats[month]["weekend_9am_5pm_cost"] += kwh * row['price']
-    
+
+            # Check if in 7am-9pm peak range (7 to 21, i.e., hours 7, 8, ..., 20)
+            if _is_in_hour_range(hour, 7, 21):
+                monthly_stats[month]["peak_kwh"] += kwh
+                monthly_stats[month]["peak_cost"] += kwh * row['price']
+
     # Calculate percentages
     for month in monthly_stats:
         stats = monthly_stats[month]
-        
+
         # Weekend percentage
         if stats["total_kwh"] > 0:
             stats["weekend_pct"] = (stats["weekend_kwh"] / stats["total_kwh"]) * 100
         else:
             stats["weekend_pct"] = 0.0
-        
+
         # Weekend 9am-5pm percentage
         if stats["total_kwh"] > 0:
             stats["weekend_9am_5pm_pct"] = (stats["weekend_9am_5pm_kwh"] / stats["total_kwh"]) * 100
         else:
             stats["weekend_9am_5pm_pct"] = 0.0
-    
+
+        # Peak (7am-9pm) percentage
+        if stats["total_kwh"] > 0:
+            stats["peak_pct"] = (stats["peak_kwh"] / stats["total_kwh"]) * 100
+        else:
+            stats["peak_pct"] = 0.0
+
     # Get sorted list of unique months
     sorted_months = sorted(monthly_stats.keys())
-    
+
     return [monthly_stats[m] for m in sorted_months]
 
 
@@ -166,30 +180,33 @@ def print_table(stats: List[Dict]) -> None:
     """Print monthly statistics as a formatted table to console."""
     print("\nMonthly Usage Statistics")
     print("=" * 100)
-    
+
     # Header
-    print(f"{'Month':<10} {'Total kWh':>12} {'Weekend %':>12} {'Weekend (9-5pm) %':>20}")
+    print(f"{'Month':<10} {'Total kWh':>12} {'Weekend %':>12} {'Weekend (9-5pm) %':>20} {'Peak (7am-9pm) %':>18}")
     print("-" * 100)
-    
+
     for stat in stats:
         month = stat["month"][:4] + "-" + stat["month"][5:]  # Format as YYYY-MM
-        print(f"{month:<10} {stat['total_kwh']:>12.2f} {stat['weekend_pct']:>10.2f}% {stat['weekend_9am_5pm_pct']:>18.2f}%")
-    
+        print(f"{month:<10} {stat['total_kwh']:>12.2f} {stat['weekend_pct']:>10.2f}% {stat['weekend_9am_5pm_pct']:>18.2f}% {stat['peak_pct']:>16.2f}%")
+
     print("-" * 100)
-    
+
     # Calculate and print totals
     total_kwh = sum(s["total_kwh"] for s in stats)
     total_weekend_kwh = sum(s["weekend_kwh"] for s in stats)
     total_weekend_9am_5pm_kwh = sum(s["weekend_9am_5pm_kwh"] for s in stats)
-    
+    total_peak_kwh = sum(s["peak_kwh"] for s in stats)
+
     if total_kwh > 0:
         total_weekend_pct = (total_weekend_kwh / total_kwh) * 100
         total_weekend_9am_5pm_pct = (total_weekend_9am_5pm_kwh / total_kwh) * 100
+        total_peak_pct = (total_peak_kwh / total_kwh) * 100
     else:
         total_weekend_pct = 0.0
         total_weekend_9am_5pm_pct = 0.0
-    
-    print(f"{'Total':<10} {total_kwh:>12.2f} {total_weekend_pct:>10.2f}% {total_weekend_9am_5pm_pct:>18.2f}%")
+        total_peak_pct = 0.0
+
+    print(f"{'Total':<10} {total_kwh:>12.2f} {total_weekend_pct:>10.2f}% {total_weekend_9am_5pm_pct:>18.2f}% {total_peak_pct:>16.2f}%")
     print()
 
 
@@ -205,14 +222,18 @@ def write_csv(stats: List[Dict], csv_path: str) -> None:
         "weekend_9am_5pm_cost",
         "weekend_pct",
         "weekend_9am_5pm_pct",
+        "peak_kwh",
+        "peak_cost",
+        "peak_pct",
     ]
-    
+
     with open(csv_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for stat in stats:
-            writer.writerow(stat)
-    
+            row = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in stat.items()}
+            writer.writerow(row)
+
     print(f"Results written to {csv_path}")
 
 
@@ -220,25 +241,25 @@ def main():
     """Main function to run usage stats analysis."""
     data_dir = "data"
     output_csv = "usage_stats.csv"
-    
+
     # Load data
     print(f"Loading usage data from '{data_dir}'...")
     data = load_usage_data(data_dir)
-    
+
     if not data:
         print("No data found.")
         return
-    
+
     print(f"Loaded {len(data)} days of data.")
-    
+
     # Calculate statistics
     print("Calculating monthly statistics...")
     stats = calculate_monthly_stats(data)
     print(f"Calculated statistics for {len(stats)} months.")
-    
+
     # Print table
     print_table(stats)
-    
+
     # Write CSV
     write_csv(stats, output_csv)
 
