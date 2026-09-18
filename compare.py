@@ -88,6 +88,12 @@ class PlanComparison:
 
 	# Standard plan pricing configuration (ex GST) - daily charges per day
 	PLANS = {
+		"standard_grandfather": {
+			"rate": 0.227,         # $/kWh
+			"levy": 0.0019,        # $/kWh
+			"daily_charge": 2.499, # $/day
+			"free_periods": [],    # (hour_start, hour_end, day_type)
+		},
 		"standard": {
 			"rate": 0.244,         # $/kWh
 			"levy": 0.0019,        # $/kWh
