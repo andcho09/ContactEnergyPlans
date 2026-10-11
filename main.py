@@ -43,6 +43,8 @@ class UsageDownloader:
 				print(f"Downloading data for {str(date)}...")
 				try:
 					data = await self.download_async(session, date)
+					if data is None:
+						continue
 					self.write(date, data, overwrite)
 				except Exception as error:
 					print(f"Failed to download {str(date)}: {error}")
@@ -151,7 +153,11 @@ class GenesisEnergyUsageDownloader(UsageDownloader):
 				response.raise_for_status()
 				body = await response.json()
 		items = sorted(body.get("usage", []), key=lambda item: item["startDate"])
-		return [self._to_usage_datum(item) for item in items]
+		data = [self._to_usage_datum(item) for item in items]
+		if all(d.value == 0 for d in data):
+			print(f"WARNING: Usage data for {str(date)} is not available yet, skipping")
+			return None
+		return data
 
 	@staticmethod
 	def _to_usage_datum(item: dict) -> UsageDatum:
