@@ -10,6 +10,13 @@
 			"request": "launch",
 			"program": "main.py",
 			"console": "integratedTerminal",
+			"args": [
+				"genesis",
+				"--start",
+				"2026-08-13",
+				"--end",
+				"2026-08-31",
+			]
 			//"justMyCode": false
 		},
 		{

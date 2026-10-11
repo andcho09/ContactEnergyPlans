@@ -1,6 +1,6 @@
 # Contact Energy Daily Usage Downloader
 
-Downloads Contact Energy electricity usage using [contact-energy-nz](https://github.com/tkhadimullin/contact-energy-nz).
+Downloads Contact Energy electricity usage using [contact-energy-nz](https://github.com/tkhadimullin/contact-energy-nz), and Genesis Energy electricity usage directly from the Genesis web API.
 
 ## Usage
 
@@ -21,17 +21,23 @@ Downloads Contact Energy electricity usage using [contact-energy-nz](https://git
 	* `ACCOUNT_ID`
 	* `CONTRACT_ID`
 	* `TOKEN` (or `USERNAME`/`PASSWORD` as an alternative authentication method)
+	* `GENESIS_TOKEN` (bearer token from the Genesis web app, for Genesis downloads)
 
 **Downloading usage data**
 
-1. Tweak the start and end dates in [main.py](main.py)
-2. Run the downloader
+Run the downloader, choosing either the `contact` or `genesis` provider and the
+inclusive date range (`--start`/`--end`, `YYYY-MM-DD`):
 
 	```bash
-	python3 main.py
+	python3 main.py contact --start 2025-06-01 --end 2026-06-30
+	# or
+	python3 main.py genesis --start 2026-07-01 --end 2026-10-09
 	```
 
-	Files are saved as .csv to the `data` folder by date.
+	Only the selected provider is authenticated to and downloaded from. Files are
+	saved as .csv to the `data` folder by date, with the same
+	`hour,kwh,price,uncharged_kwh,offpeak_kwh,offpeak_price` shape for both
+	Contact and Genesis.
 
 **Analysing usage patterns**
 
